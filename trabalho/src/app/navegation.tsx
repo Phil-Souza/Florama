@@ -1,44 +1,10 @@
 import { useMemo, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-
-type Category = "Tudo" | "Rosas" | "Tulipas" | "Buquês";
-
-type Product = {
-  name: string;
-  detail: string;
-  price: string;
-  category: Exclude<Category, "Tudo">;
-  flower: string;
-  color: string;
-};
-
-const categories: Category[] = ["Tudo", "Rosas", "Tulipas", "Buquês"];
-
-const products: Product[] = [
-  { name: "Monalisa", detail: "1 rosa", price: "R$ 15,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Triana", detail: "3 rosas", price: "R$ 30,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Septália", detail: "7 rosas", price: "R$ 65,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Década", detail: "10 rosas", price: "R$ 90,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Donzela", detail: "12 rosas", price: "R$ 110,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Quinzel", detail: "15 rosas", price: "R$ 130,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Octelle", detail: "18 rosas", price: "R$ 155,00", category: "Rosas", flower: "🌹", color: "#f5e9e8" },
-  { name: "Primavera", detail: "1 tulipa", price: "R$ 15,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Turban", detail: "3 tulipas", price: "R$ 30,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Holanda", detail: "7 tulipas", price: "R$ 65,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Tulipar", detail: "10 tulipas", price: "R$ 90,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Jardim", detail: "12 tulipas", price: "R$ 110,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Amsterdam", detail: "15 tulipas", price: "R$ 130,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Campo", detail: "18 tulipas", price: "R$ 155,00", category: "Tulipas", flower: "🌷", color: "#edf1e8" },
-  { name: "Rosa Adormecida", detail: "Buquê artesanal em cetim", price: "R$ 70,00", category: "Buquês", flower: "💐", color: "#f3eaf0" },
-  { name: "Rosa de Ouro", detail: "Buquê artesanal em cetim", price: "R$ 70,00", category: "Buquês", flower: "💐", color: "#f3eee0" },
-];
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppLayout, AppHeader } from "@/components/AppLayout";
+import { ProductCard } from "@/components/ProductCard";
+import { useStore } from "@/context/StoreContext";
+import { categories, categorySymbols, products } from "@/data/catalog";
+import type { Category } from "@/data/catalog";
 
 function HeroFlowers() {
   return (
@@ -58,26 +24,9 @@ function HeroFlowers() {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${product.name}, ${product.detail}, ${product.price}`} style={styles.productCard}>
-      <View style={[styles.productArt, { backgroundColor: product.color }]}>
-        <Text style={styles.productFlower}>{product.flower}</Text>
-      </View>
-      <View style={styles.productInfo}>
-        <View style={styles.productTitleRow}>
-          <Text numberOfLines={1} style={styles.productName}>{product.name}</Text>
-          <Text style={styles.heart}>♡</Text>
-        </View>
-        <Text numberOfLines={1} style={styles.productDetail}>{product.detail}</Text>
-        <Text style={styles.productPrice}>{product.price}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
 export default function Navegation() {
   const [activeCategory, setActiveCategory] = useState<Category>("Tudo");
+  const { favorites, toggleFavorite, addToCart } = useStore();
 
   const visibleProducts = useMemo(
     () => activeCategory === "Tudo"
@@ -87,119 +36,62 @@ export default function Navegation() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <View style={styles.page}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.brand}>Florama</Text>
-              <Text style={styles.headerSubtitle}>Flores para momentos especiais</Text>
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Sacola de compras" style={styles.bagButton}>
-              <Text style={styles.bagIcon}>▱</Text>
-              <View style={styles.bagBadge}><Text style={styles.bagBadgeText}>0</Text></View>
-            </Pressable>
-          </View>
+    <AppLayout activeTab="inicio">
+      <AppHeader subtitle="Flores para momentos especiais" />
 
-          <View style={styles.hero}>
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroEyebrow}>FEITO À MÃO, COM CARINHO</Text>
-              <Text style={styles.heroTitle}>Flores que{ "\n" }marcam momentos</Text>
-              <Text style={styles.heroDescription}>Buquês artesanais para celebrar a sua história.</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setActiveCategory("Tudo")}
-                style={styles.heroButton}
-              >
-                <Text style={styles.heroButtonText}>Explorar catálogo</Text>
-              </Pressable>
-            </View>
-            <HeroFlowers />
-          </View>
+      <View style={styles.hero}>
+        <View style={styles.heroCopy}>
+          <Text style={styles.heroEyebrow}>FEITO À MÃO, COM CARINHO</Text>
+          <Text style={styles.heroTitle}>Flores que{ "\n" }marcam momentos</Text>
+          <Text style={styles.heroDescription}>Buquês artesanais para celebrar a sua história.</Text>
+        </View>
+        <HeroFlowers />
+      </View>
 
-          <View style={styles.sectionHeading}>
-            <View>
-              <Text style={styles.sectionTitle}>Escolha suas flores</Text>
-              <Text style={styles.sectionSubtitle}>Qual tipo combina com o momento?</Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryList}
-          >
-            {categories.map((category) => {
-              const selected = activeCategory === category;
-              const symbol = category === "Rosas" ? "✿" : category === "Tulipas" ? "❀" : category === "Buquês" ? "❋" : "✽";
-              return (
-                <Pressable
-                  key={category}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => setActiveCategory(category)}
-                  style={[styles.categoryButton, selected && styles.categoryButtonSelected]}
-                >
-                  <Text style={[styles.categorySymbol, selected && styles.categoryTextSelected]}>{symbol}</Text>
-                  <Text style={[styles.categoryLabel, selected && styles.categoryTextSelected]}>{category}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <View style={styles.productsHeading}>
-            <View>
-              <Text style={styles.sectionTitle}>{activeCategory === "Tudo" ? "Destaques do catálogo" : activeCategory}</Text>
-              <Text style={styles.sectionSubtitle}>Modelos e valores do nosso catálogo</Text>
-            </View>
-            <Pressable accessibilityRole="button" onPress={() => setActiveCategory("Tudo")}>
-              <Text style={styles.viewAll}>Ver todos  →</Text>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.productList}
-          >
-            {visibleProducts.map((product) => (
-              <ProductCard key={product.name} product={product} />
-            ))}
-          </ScrollView>
-
-          <View style={styles.customOrder}>
-            <Text style={styles.customOrderIcon}>✿</Text>
-            <View style={styles.customOrderCopy}>
-              <Text style={styles.customOrderTitle}>Monte seu buquê</Text>
-              <Text style={styles.customOrderDescription}>Escolha as flores, cores e quantidades.</Text>
-            </View>
-            <Text style={styles.customOrderArrow}>›</Text>
-          </View>
-        </ScrollView>
-
-        <View style={styles.bottomBar}>
-          <View style={styles.bottomItem}>
-            <Text style={[styles.bottomIcon, styles.bottomIconActive]}>⌂</Text>
-            <Text style={[styles.bottomLabel, styles.bottomLabelActive]}>Início</Text>
-          </View>
-          <View style={styles.bottomItem}>
-            <Text style={styles.bottomIcon}>❀</Text>
-            <Text style={styles.bottomLabel}>Flores</Text>
-          </View>
-          <View style={styles.bottomItem}>
-            <Text style={styles.bottomIcon}>♡</Text>
-            <Text style={styles.bottomLabel}>Favoritos</Text>
-          </View>
-          <View style={styles.bottomItem}>
-            <Text style={styles.bottomIcon}>○</Text>
-            <Text style={styles.bottomLabel}>Perfil</Text>
-          </View>
+      <View style={styles.sectionHeading}>
+        <View>
+          <Text style={styles.sectionTitle}>Escolha suas flores</Text>
+          <Text style={styles.sectionSubtitle}>Qual tipo combina com o momento?</Text>
         </View>
       </View>
-    </SafeAreaView>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
+        {categories.map((category) => {
+          const selected = activeCategory === category;
+          return (
+            <Pressable
+              key={category}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setActiveCategory(category)}
+              style={[styles.categoryButton, selected && styles.categoryButtonSelected]}
+            >
+              <Text style={[styles.categorySymbol, selected && styles.categoryTextSelected]}>{categorySymbols[category]}</Text>
+              <Text style={[styles.categoryLabel, selected && styles.categoryTextSelected]}>{category}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      <View style={styles.productsHeading}>
+        <View>
+          <Text style={styles.sectionTitle}>{activeCategory === "Tudo" ? "Catálogo completo" : activeCategory}</Text>
+          <Text style={styles.sectionSubtitle}>Modelos e valores do nosso catálogo</Text>
+        </View>
+      </View>
+
+      <View style={styles.productList}>
+        {visibleProducts.map((product) => (
+          <ProductCard
+            key={product.name}
+            product={product}
+            isFavorite={favorites.includes(product.name)}
+            onToggleFavorite={() => toggleFavorite(product.name)}
+            onAddToCart={() => addToCart(product.name)}
+          />
+        ))}
+      </View>
+    </AppLayout>
   );
 }
 
@@ -298,19 +190,6 @@ const styles = StyleSheet.create({
     color: "#6b776d",
     fontSize: 10,
     lineHeight: 15,
-  },
-  heroButton: {
-    alignSelf: "flex-start",
-    marginTop: 13,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 13,
-    backgroundColor: "#31583d",
-  },
-  heroButtonText: {
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "600",
   },
   heroFlowers: {
     position: "absolute",
@@ -461,17 +340,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  viewAll: {
-    color: "#647568",
-    fontSize: 10,
-  },
   productList: {
     paddingHorizontal: 18,
     paddingBottom: 18,
-    gap: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 12,
   },
   productCard: {
-    width: 145,
+    width: "47%",
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#edf0ea",
@@ -518,45 +396,6 @@ const styles = StyleSheet.create({
     color: "#35463a",
     fontSize: 11,
     fontWeight: "600",
-  },
-  customOrder: {
-    marginHorizontal: 18,
-    marginTop: 2,
-    paddingHorizontal: 15,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 17,
-    backgroundColor: "#e9eee4",
-  },
-  customOrderIcon: {
-    width: 38,
-    height: 38,
-    marginRight: 12,
-    overflow: "hidden",
-    borderRadius: 12,
-    color: "#31583d",
-    backgroundColor: "#ffffff",
-    textAlign: "center",
-    textAlignVertical: "center",
-    fontSize: 24,
-  },
-  customOrderCopy: {
-    flex: 1,
-  },
-  customOrderTitle: {
-    color: "#2e4434",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  customOrderDescription: {
-    marginTop: 3,
-    color: "#768176",
-    fontSize: 9,
-  },
-  customOrderArrow: {
-    color: "#31583d",
-    fontSize: 25,
   },
   bottomBar: {
     minHeight: 64,
