@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useStore } from "@/context/StoreContext";
+import { formatPhoneInput, validateRegistration } from "@/utils/registrationValidation";
 
 export default function CadastroScreen() {
   const { register, user } = useStore();
@@ -10,6 +11,7 @@ export default function CadastroScreen() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,18 +20,15 @@ export default function CadastroScreen() {
   }, [user]);
 
   const handleRegister = async () => {
-    if (![name, email, phone, address, password].every((value) => value.trim())) {
-      setError("Preencha todos os campos.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("A senha precisa ter pelo menos 8 caracteres.");
+    const validationError = validateRegistration({ name, email, phone, address, password, confirmPassword });
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setBusy(true);
     setError("");
     try {
-      await register({ name, email, phone, address, password });
+      await register({ name, email, phone, address, password, confirmPassword });
       router.replace("/navegation");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível criar sua conta.");
@@ -44,11 +43,12 @@ export default function CadastroScreen() {
         <Text style={styles.brand}>Florama</Text>
         <Text style={styles.title}>Crie sua conta</Text>
         <Text style={styles.subtitle}>Seus dados vão facilitar os próximos pedidos.</Text>
-        <Field label="Nome completo" value={name} onChangeText={setName} placeholder="Como podemos chamar você?" />
+        <Field label="Nome completo" value={name} onChangeText={setName} placeholder="Como podemos chamar você?" maxLength={64} />
         <Field label="E-mail" value={email} onChangeText={setEmail} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" />
-        <Field label="Telefone" value={phone} onChangeText={setPhone} placeholder="(00) 00000-0000" keyboardType="phone-pad" />
+        <Field label="Telefone" value={phone} onChangeText={(value) => setPhone(formatPhoneInput(value))} placeholder="(11) 91234-5678" keyboardType="phone-pad" maxLength={16} />
         <Field label="Endereço de entrega" value={address} onChangeText={setAddress} placeholder="Rua, número, bairro e cidade" />
-        <Field label="Senha (mínimo 8 caracteres)" value={password} onChangeText={setPassword} placeholder="Crie uma senha" secureTextEntry />
+        <Field label="Senha" value={password} onChangeText={setPassword} placeholder="Crie uma senha" secureTextEntry maxLength={128} />
+        <Field label="Confirmar senha" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Digite a senha novamente" secureTextEntry maxLength={128} />
         {error !== "" && <Text style={styles.error}>{error}</Text>}
         <Pressable disabled={busy} onPress={() => void handleRegister()} style={[styles.primaryButton, busy && styles.disabled]}>
           <Text style={styles.primaryButtonText}>{busy ? "Criando conta..." : "Criar conta"}</Text>
@@ -70,13 +70,14 @@ type FieldProps = {
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   secureTextEntry?: boolean;
+  maxLength?: number;
 };
 
-function Field({ label, value, onChangeText, placeholder, keyboardType = "default", autoCapitalize = "sentences", secureTextEntry = false }: FieldProps) {
+function Field({ label, value, onChangeText, placeholder, keyboardType = "default", autoCapitalize = "sentences", secureTextEntry = false, maxLength }: FieldProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#9aa19b" keyboardType={keyboardType} autoCapitalize={autoCapitalize} secureTextEntry={secureTextEntry} style={styles.input} />
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#9aa19b" keyboardType={keyboardType} autoCapitalize={autoCapitalize} secureTextEntry={secureTextEntry} maxLength={maxLength} style={styles.input} />
     </View>
   );
 }

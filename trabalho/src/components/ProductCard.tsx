@@ -10,29 +10,44 @@ type ProductCardProps = {
   product: Product;
   isFavorite: boolean;
   onToggleFavorite: () => void;
-  onAddToCart: () => void;
+  onAddToCart: () => Promise<boolean>;
+  compact?: boolean;
 };
 
-export function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart }: ProductCardProps) {
+export function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart, compact = false }: ProductCardProps) {
   const [justAdded, setJustAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addFailed, setAddFailed] = useState(false);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
     if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
   }, []);
 
-  const handleAddToCart = () => {
-    onAddToCart();
-    setJustAdded(true);
+  const handleAddToCart = async () => {
+    setAdding(true);
+    setJustAdded(false);
+    setAddFailed(false);
     if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
-    feedbackTimer.current = setTimeout(() => {
-      setJustAdded(false);
-      feedbackTimer.current = null;
-    }, 1600);
+    try {
+      const added = await onAddToCart();
+      setJustAdded(added);
+      setAddFailed(!added);
+      if (added) {
+        feedbackTimer.current = setTimeout(() => {
+          setJustAdded(false);
+          feedbackTimer.current = null;
+        }, 1600);
+      }
+    } catch {
+      setAddFailed(true);
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, compact && styles.compactCard]}>
       <View style={[styles.art, { backgroundColor: product.color }]}>
         <Text style={styles.flower}>{product.flower}</Text>
       </View>
@@ -52,11 +67,20 @@ export function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart
         <Text style={styles.price}>{formatPrice(product.priceCents)}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={justAdded ? product.name + " foi adicionado à sacola" : "Adicionar " + product.name + " à sacola"}
-          onPress={handleAddToCart}
-          style={[styles.addButton, justAdded && styles.addButtonConfirmed]}
+          accessibilityLabel={
+            adding ? "Adicionando " + product.name + " à sacola"
+              : justAdded ? product.name + " foi adicionado à sacola"
+                : addFailed ? "Não foi possível adicionar " + product.name + " à sacola"
+                  : "Adicionar " + product.name + " à sacola"
+          }
+          accessibilityState={{ disabled: adding }}
+          disabled={adding}
+          onPress={() => void handleAddToCart()}
+          style={[styles.addButton, justAdded && styles.addButtonConfirmed, adding && styles.addButtonDisabled]}
         >
-          <Text style={styles.addButtonText}>{justAdded ? "✓ Adicionado" : "Adicionar à sacola"}</Text>
+          <Text style={styles.addButtonText}>
+            {adding ? "Adicionando..." : justAdded ? "✓ Adicionado" : addFailed ? "Tentar novamente" : "Adicionar à sacola"}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -65,13 +89,14 @@ export function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart
 
 const styles = StyleSheet.create({
   card: {
-    width: "47%",
+    width: "100%",
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#edf0ea",
     borderRadius: 17,
     backgroundColor: "#ffffff",
   },
+  compactCard: { width: "47%" },
   art: { height: 116, alignItems: "center", justifyContent: "center", margin: 8, borderRadius: 13 },
   flower: { fontSize: 52 },
   info: { paddingHorizontal: 10, paddingBottom: 11 },
@@ -83,5 +108,6 @@ const styles = StyleSheet.create({
   price: { marginTop: 5, color: "#35463a", fontSize: 11, fontWeight: "700" },
   addButton: { marginTop: 9, paddingVertical: 9, alignItems: "center", borderRadius: 11, backgroundColor: "#31583d" },
   addButtonConfirmed: { backgroundColor: "#64876a" },
+  addButtonDisabled: { opacity: 0.65 },
   addButtonText: { color: "#ffffff", fontSize: 10, fontWeight: "600" },
 });

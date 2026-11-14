@@ -1,5 +1,5 @@
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Response, status
@@ -8,7 +8,7 @@ from psycopg.errors import UniqueViolation
 
 from .config import CORS_ORIGINS
 from .database import get_db
-from .schemas import CartItemRequest, LoginRequest, OrderCreateRequest, ProfileUpdateRequest, RegisterRequest
+from .schemas import AdminOrderStatusRequest, CartItemRequest, LoginRequest, OrderCreateRequest, ProfileUpdateRequest, RegisterRequest
 from .security import create_access_token, get_current_user_id, hash_password, verify_password
 
 app = FastAPI(title="Florama API", version="1.0.0")
@@ -16,7 +16,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -28,6 +28,7 @@ def profile_out(row: dict) -> dict:
         "email": row["email"],
         "phone": row["telefone"] or "",
         "address": row["endereco"] or "",
+        "role": row.get("papel", "cliente"),
     }
 
 
@@ -55,6 +56,20 @@ def get_active_cart_id(connection: psycopg.Connection, user_id: UUID) -> UUID:
         (user_id,),
     ).fetchone()
     return created["id"]
+
+
+def require_admin(
+    user_id: UUID = Depends(get_current_user_id),
+    connection: psycopg.Connection = Depends(get_db),
+) -> UUID:
+    with connection.transaction():
+        user = connection.execute(
+            "SELECT papel FROM public.perfis WHERE id = %s",
+            (user_id,),
+        ).fetchone()
+    if not user or user["papel"] != "admin":
+        raise HTTPException(status_code=403, detail="Acesso restrito à administração.")
+    return user_id
 
 
 def cart_out(connection: psycopg.Connection, cart_id: UUID) -> dict:
@@ -85,6 +100,12 @@ def cart_out(connection: psycopg.Connection, cart_id: UUID) -> dict:
     }
 
 
+def normalize_order_status(order: dict) -> str:
+    if order["status_pagamento"] == "aprovado" and order["status"] == "aguardando_pagamento":
+        return "paga"
+    return order["status"]
+
+
 def order_out(connection: psycopg.Connection, order: dict) -> dict:
     rows = connection.execute(
         """
@@ -105,16 +126,38 @@ def order_out(connection: psycopg.Connection, order: dict) -> dict:
         }
         for row in rows
     ]
+    status = normalize_order_status(order)
     return {
         "id": str(order["id"]),
-        "status": order["status"],
+        "status": status,
         "paymentStatus": order["status_pagamento"],
+        "recipientName": order["nome_recebedor"] or "",
+        "recipientPhone": order["telefone_recebedor"] or "",
+        "deliveryAddress": order["endereco_entrega"] or "",
         "subtotalCents": int(order["subtotal"] * 100),
         "deliveryFeeCents": int(order["taxa_entrega"] * 100),
         "totalCents": int(order["total"] * 100),
         "createdAt": order["criado_em"].isoformat(),
         "items": items,
     }
+
+
+def admin_order_out(connection: psycopg.Connection, order: dict) -> dict:
+    result = order_out(connection, order)
+    result.update({
+        "customerName": order["cliente_nome"],
+        "customerEmail": order["cliente_email"],
+        "paymentValidatedAt": (
+            order["pagamento_validado_em"].isoformat()
+            if order["pagamento_validado_em"] else None
+        ),
+        "paymentValidatedBy": (
+            str(order["pagamento_validado_por"])
+            if order["pagamento_validado_por"] else None
+        ),
+        "paymentValidatorName": order.get("validador_nome"),
+    })
+    return result
 
 
 @app.get("/health")
@@ -153,27 +196,30 @@ def list_products(
 @app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, connection: psycopg.Connection = Depends(get_db)):
     email = str(payload.email).strip().lower()
+    user_id = uuid4()
+    access_token = create_access_token(user_id)
+    password_hash = hash_password(payload.password)
     with connection.transaction():
         try:
             user = connection.execute(
                 """
-                INSERT INTO public.perfis (nome, email, telefone, endereco, senha_hash)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id, nome, email, telefone, endereco
+                INSERT INTO public.perfis (id, nome, email, telefone, endereco, senha_hash)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, nome, email, telefone, endereco, papel
                 """,
-                (payload.name.strip(), email, payload.phone.strip(), payload.address.strip(), hash_password(payload.password)),
+                (user_id, payload.name, email, payload.phone, payload.address, password_hash),
             ).fetchone()
         except UniqueViolation as exc:
             raise HTTPException(status_code=409, detail="Este e-mail já está cadastrado.") from exc
         get_active_cart_id(connection, user["id"])
-    return {"accessToken": create_access_token(user["id"]), "user": profile_out(user)}
+    return {"accessToken": access_token, "user": profile_out(user)}
 
 
 @app.post("/api/auth/login")
 def login(payload: LoginRequest, connection: psycopg.Connection = Depends(get_db)):
     user = connection.execute(
         """
-        SELECT id, nome, email, telefone, endereco, senha_hash
+        SELECT id, nome, email, telefone, endereco, senha_hash, papel
         FROM public.perfis WHERE lower(email) = %s
         """,
         (str(payload.email).strip().lower(),),
@@ -189,7 +235,7 @@ def get_profile(
     connection: psycopg.Connection = Depends(get_db),
 ):
     user = connection.execute(
-        "SELECT id, nome, email, telefone, endereco FROM public.perfis WHERE id = %s",
+        "SELECT id, nome, email, telefone, endereco, papel FROM public.perfis WHERE id = %s",
         (user_id,),
     ).fetchone()
     if not user:
@@ -207,7 +253,7 @@ def update_profile(
         """
         UPDATE public.perfis SET nome = %s, telefone = %s, endereco = %s
         WHERE id = %s
-        RETURNING id, nome, email, telefone, endereco
+        RETURNING id, nome, email, telefone, endereco, papel
         """,
         (payload.name.strip(), payload.phone.strip(), payload.address.strip(), user_id),
     ).fetchone()
@@ -223,7 +269,7 @@ def list_favorites(
     connection: psycopg.Connection = Depends(get_db),
 ):
     rows = connection.execute(
-        "SELECT produto_id FROM public.favoritos WHERE usuario_id = %s ORDER BY created_at DESC",
+        "SELECT produto_id FROM public.favoritos WHERE usuario_id = %s ORDER BY criado_em DESC",
         (user_id,),
     ).fetchall()
     return {"productIds": [str(row["produto_id"]) for row in rows]}
@@ -392,3 +438,206 @@ def get_order(
     if not order:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
     return order_out(connection, order)
+
+
+@app.post("/api/orders/{order_id}/cancel")
+def cancel_order(
+    order_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        order = connection.execute(
+            """
+            SELECT * FROM public.vendas
+            WHERE id = %s AND usuario_id = %s
+            FOR UPDATE
+            """,
+            (order_id, user_id),
+        ).fetchone()
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        if order["status"] == "cancelada":
+            return order_out(connection, order)
+        if order["status"] != "aguardando_pagamento" or order["status_pagamento"] != "pendente":
+            raise HTTPException(
+                status_code=409,
+                detail="Só é possível cancelar pedidos que aguardam pagamento.",
+            )
+        updated = connection.execute(
+            """
+            UPDATE public.vendas
+            SET status = 'cancelada'
+            WHERE id = %s
+            RETURNING *
+            """,
+            (order_id,),
+        ).fetchone()
+        return order_out(connection, updated)
+
+
+@app.get("/api/admin/orders")
+def list_admin_orders(
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    orders = connection.execute(
+        """
+        SELECT v.*, p.nome AS cliente_nome, p.email AS cliente_email,
+               a.nome AS validador_nome
+        FROM public.vendas v
+        JOIN public.perfis p ON p.id = v.usuario_id
+        LEFT JOIN public.perfis a ON a.id = v.pagamento_validado_por
+        ORDER BY
+          CASE WHEN v.status = 'aguardando_pagamento' THEN 0 ELSE 1 END,
+          v.criado_em DESC
+        """
+    ).fetchall()
+    return [admin_order_out(connection, order) for order in orders]
+
+
+@app.post("/api/admin/orders/{order_id}/confirm-payment")
+def confirm_order_payment(
+    order_id: UUID,
+    admin_id: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        order = connection.execute(
+            """
+            SELECT status, status_pagamento, pagamento_validado_por, pagamento_validado_em
+            FROM public.vendas WHERE id = %s FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+
+        if order["status_pagamento"] == "aprovado":
+            if order["status"] == "aguardando_pagamento":
+                connection.execute(
+                    "UPDATE public.vendas SET status = 'paga' WHERE id = %s",
+                    (order_id,),
+                )
+            if order["pagamento_validado_por"] is None or order["pagamento_validado_em"] is None:
+                connection.execute(
+                    """
+                    UPDATE public.vendas
+                    SET pagamento_validado_por = %s, pagamento_validado_em = now()
+                    WHERE id = %s
+                    """,
+                    (admin_id, order_id),
+                )
+            updated = connection.execute(
+                """
+                SELECT v.*, p.nome AS cliente_nome, p.email AS cliente_email,
+                       a.nome AS validador_nome
+                FROM public.vendas v
+                JOIN public.perfis p ON p.id = v.usuario_id
+                LEFT JOIN public.perfis a ON a.id = v.pagamento_validado_por
+                WHERE v.id = %s
+                """,
+                (order_id,),
+            ).fetchone()
+            return admin_order_out(connection, updated)
+
+        if order["status"] != "aguardando_pagamento" or order["status_pagamento"] != "pendente":
+            raise HTTPException(
+                status_code=409,
+                detail="Só é possível validar pagamentos de pedidos aguardando pagamento.",
+            )
+        connection.execute(
+            """
+            UPDATE public.vendas
+            SET status = 'paga', status_pagamento = 'aprovado',
+                pagamento_validado_por = %s, pagamento_validado_em = now()
+            WHERE id = %s
+            """,
+            (admin_id, order_id),
+        )
+        updated = connection.execute(
+            """
+            SELECT v.*, p.nome AS cliente_nome, p.email AS cliente_email,
+                   a.nome AS validador_nome
+            FROM public.vendas v
+            JOIN public.perfis p ON p.id = v.usuario_id
+            LEFT JOIN public.perfis a ON a.id = v.pagamento_validado_por
+            WHERE v.id = %s
+            """,
+            (order_id,),
+        ).fetchone()
+        return admin_order_out(connection, updated)
+
+
+@app.patch("/api/admin/orders/{order_id}/status")
+def update_admin_order_status(
+    order_id: UUID,
+    payload: AdminOrderStatusRequest,
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    allowed_next_status = {
+        "aguardando_pagamento": {"cancelada"},
+        "paga": {"em_preparo"},
+        "em_preparo": {"pronta_entrega"},
+        "pronta_entrega": {"concluida"},
+        "concluida": set(),
+        "cancelada": set(),
+    }
+    with connection.transaction():
+        order = connection.execute(
+            "SELECT status FROM public.vendas WHERE id = %s FOR UPDATE",
+            (order_id,),
+        ).fetchone()
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        if payload.status not in allowed_next_status[order["status"]]:
+            raise HTTPException(status_code=409, detail="Transição de status não permitida.")
+        connection.execute(
+            "UPDATE public.vendas SET status = %s WHERE id = %s",
+            (payload.status, order_id),
+        )
+        updated = connection.execute(
+            """
+            SELECT v.*, p.nome AS cliente_nome, p.email AS cliente_email,
+                   a.nome AS validador_nome
+            FROM public.vendas v
+            JOIN public.perfis p ON p.id = v.usuario_id
+            LEFT JOIN public.perfis a ON a.id = v.pagamento_validado_por
+            WHERE v.id = %s
+            """,
+            (order_id,),
+        ).fetchone()
+        return admin_order_out(connection, updated)
+
+
+@app.delete("/api/admin/orders/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_admin_order(
+    order_id: UUID,
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        order = connection.execute(
+            """
+            SELECT status, status_pagamento, pagamento_validado_por, pagamento_validado_em
+            FROM public.vendas
+            WHERE id = %s
+            FOR UPDATE
+            """,
+            (order_id,),
+        ).fetchone()
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        if (
+            order["status"] != "cancelada"
+            or order["status_pagamento"] != "pendente"
+            or order["pagamento_validado_por"] is not None
+            or order["pagamento_validado_em"] is not None
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Só é possível excluir pedidos cancelados e sem pagamento validado.",
+            )
+        connection.execute("DELETE FROM public.vendas WHERE id = %s", (order_id,))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

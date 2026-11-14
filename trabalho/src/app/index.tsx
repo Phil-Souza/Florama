@@ -193,9 +193,7 @@
 //     color: '#9A858A',
 //   },
 // });
-import React, { useEffect, useState } from "react";
 import { router } from "expo-router";
-import { useStore } from "@/context/StoreContext";
 import {
   DimensionValue,
   Pressable,
@@ -205,9 +203,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 
-const slides = [
-  ["Mais que flores, uma forma de dizer o que você sente."]
-];
+const welcomeCopy = "Mais que flores, uma forma de dizer o que você sente.";
 
 type LeafProps = {
   left: DimensionValue;
@@ -280,8 +276,6 @@ function PlantIllustration() {
 
 export default function Index() {
   const { height } = useWindowDimensions();
-  const [step, setStep] = useState(0);
-  const [started, setStarted] = useState(false);
   const screenHeight = Math.min(height - 16, 820);
 
   return (
@@ -291,9 +285,7 @@ export default function Index() {
         <Text style={styles.tagline}>Florescendo sentimentos, entregando amor</Text>
 
         <Text style={styles.copy}>
-          {slides[step][0]}
-          {"\n"}
-          {slides[step][1]}
+          {welcomeCopy}
         </Text>
 
         <PlantIllustration />

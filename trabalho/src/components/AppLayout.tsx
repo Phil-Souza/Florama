@@ -10,6 +10,7 @@ export type AppTab = "inicio" | "favoritos" | "perfil";
 type AppLayoutProps = {
   children: ReactNode;
   activeTab: AppTab | null;
+  scrollable?: boolean;
 };
 
 type AppHeaderProps = {
@@ -84,7 +85,7 @@ function BottomNavigation({ activeTab }: { activeTab: AppTab | null }) {
   );
 }
 
-export function AppLayout({ children, activeTab }: AppLayoutProps) {
+export function AppLayout({ children, activeTab, scrollable = true }: AppLayoutProps) {
   const { authReady, user, authError } = useStore();
   useEffect(() => {
     if (authReady && !user) router.replace("/login");
@@ -101,10 +102,17 @@ export function AppLayout({ children, activeTab }: AppLayoutProps) {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <View style={styles.page}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {authError !== "" && <View style={styles.apiErrorBanner}><Text style={styles.apiErrorText}>{authError}</Text></View>}
-          {children}
-        </ScrollView>
+        {scrollable ? (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {authError !== "" && <View style={styles.apiErrorBanner}><Text style={styles.apiErrorText}>{authError}</Text></View>}
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={styles.fillContent}>
+            {authError !== "" && <View style={styles.apiErrorBanner}><Text style={styles.apiErrorText}>{authError}</Text></View>}
+            {children}
+          </View>
+        )}
         <BottomNavigation activeTab={activeTab} />
       </View>
     </SafeAreaView>
@@ -114,6 +122,7 @@ export function AppLayout({ children, activeTab }: AppLayoutProps) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f7f8f4" },
   page: { flex: 1, backgroundColor: "#f7f8f4" },
+  fillContent: { flex: 1 },
   scrollContent: { paddingTop: 12, paddingBottom: 24 },
   header: {
     minHeight: 56,

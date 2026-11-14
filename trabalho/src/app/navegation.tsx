@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppLayout, AppHeader } from "@/components/AppLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { useStore } from "@/context/StoreContext";
 import { categorySymbols } from "@/data/catalog";
-import type { Category } from "@/data/catalog";
+import type { Category, Product } from "@/data/catalog";
 
 function HeroFlowers() {
   return (
@@ -26,76 +26,151 @@ function HeroFlowers() {
 
 export default function Navegation() {
   const [activeCategory, setActiveCategory] = useState<Category>("Tudo");
-  const { favorites, toggleFavorite, addToCart, products, categories, catalogError, refreshCatalog } = useStore();
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "priceAsc" | "priceDesc">("name");
+  const {
+    favorites, toggleFavorite, addToCart, products, categories,
+    catalogLoading, catalogError, refreshCatalog,
+  } = useStore();
 
   const visibleProducts = useMemo(
-    () => activeCategory === "Tudo"
-      ? products
-      : products.filter((product) => product.category === activeCategory),
-    [activeCategory, products],
+    () => {
+      const normalizedSearch = search.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+      const filtered = products.filter((product) => {
+        const matchesCategory = activeCategory === "Tudo" || product.category === activeCategory;
+        const searchableText = `${product.name} ${product.detail} ${product.category}`
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+        return matchesCategory && searchableText.includes(normalizedSearch);
+      });
+      return filtered.sort((first, second) => {
+        if (sortBy === "priceAsc") return first.priceCents - second.priceCents || first.name.localeCompare(second.name, "pt-BR");
+        if (sortBy === "priceDesc") return second.priceCents - first.priceCents || first.name.localeCompare(second.name, "pt-BR");
+        return first.name.localeCompare(second.name, "pt-BR");
+      });
+    },
+    [activeCategory, products, search, sortBy],
   );
 
   return (
-    <AppLayout activeTab="inicio">
-      <AppHeader subtitle="Flores para momentos especiais" />
-      {catalogError !== "" && (
-        <Pressable onPress={() => void refreshCatalog()} style={styles.apiNotice}>
-          <Text style={styles.apiNoticeText}>Não foi possível atualizar o catálogo. Toque para tentar novamente.</Text>
-        </Pressable>
-      )}
+    <AppLayout activeTab="inicio" scrollable={false}>
+      <FlatList<Product>
+        style={styles.catalogList}
+        data={visibleProducts}
+        keyExtractor={(product) => product.id}
+        numColumns={2}
+        columnWrapperStyle={styles.productRow}
+        contentContainerStyle={styles.catalogListContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={catalogLoading} onRefresh={() => void refreshCatalog()} />}
+        ListHeaderComponent={
+          <>
+            <AppHeader subtitle="Flores para momentos especiais" />
+            {catalogError !== "" && (
+              <Pressable onPress={() => void refreshCatalog()} style={styles.apiNotice}>
+                <Text style={styles.apiNoticeText}>Não foi possível atualizar o catálogo. Toque para tentar novamente.</Text>
+              </Pressable>
+            )}
 
-      <View style={styles.hero}>
-        <View style={styles.heroCopy}>
-          <Text style={styles.heroEyebrow}>FEITO À MÃO, COM CARINHO</Text>
-          <Text style={styles.heroTitle}>Flores que{ "\n" }marcam momentos</Text>
-          <Text style={styles.heroDescription}>Buquês artesanais para celebrar a sua história.</Text>
-        </View>
-        <HeroFlowers />
-      </View>
+            <View style={styles.hero}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.heroEyebrow}>FEITO À MÃO, COM CARINHO</Text>
+                <Text style={styles.heroTitle}>Flores que{"\n"}marcam momentos</Text>
+                <Text style={styles.heroDescription}>Buquês artesanais para celebrar a sua história.</Text>
+              </View>
+              <HeroFlowers />
+            </View>
 
-      <View style={styles.sectionHeading}>
-        <View>
-          <Text style={styles.sectionTitle}>Escolha suas flores</Text>
-          <Text style={styles.sectionSubtitle}>Qual tipo combina com o momento?</Text>
-        </View>
-      </View>
+            <View style={styles.sectionHeading}>
+              <View>
+                <Text style={styles.sectionTitle}>Escolha suas flores</Text>
+                <Text style={styles.sectionSubtitle}>Qual tipo combina com o momento?</Text>
+              </View>
+            </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
-        {categories.map((category) => {
-          const selected = activeCategory === category;
-          return (
-            <Pressable
-              key={category}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => setActiveCategory(category)}
-              style={[styles.categoryButton, selected && styles.categoryButtonSelected]}
-            >
-              <Text style={[styles.categorySymbol, selected && styles.categoryTextSelected]}>{categorySymbols[category]}</Text>
-              <Text style={[styles.categoryLabel, selected && styles.categoryTextSelected]}>{category}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
+              {categories.map((category) => {
+                const selected = activeCategory === category;
+                return (
+                  <Pressable
+                    key={category}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => setActiveCategory(category)}
+                    style={[styles.categoryButton, selected && styles.categoryButtonSelected]}
+                  >
+                    <Text style={[styles.categorySymbol, selected && styles.categoryTextSelected]}>
+                      {categorySymbols[category] ?? "✽"}
+                    </Text>
+                    <Text style={[styles.categoryLabel, selected && styles.categoryTextSelected]}>{category}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
-      <View style={styles.productsHeading}>
-        <View>
-          <Text style={styles.sectionTitle}>{activeCategory === "Tudo" ? "Catálogo completo" : activeCategory}</Text>
-          <Text style={styles.sectionSubtitle}>Modelos e valores do nosso catálogo</Text>
-        </View>
-      </View>
+            <View style={styles.searchContainer}>
+              <TextInput
+                accessibilityLabel="Buscar produtos no catálogo"
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Buscar flores, buquês..."
+                placeholderTextColor="#899089"
+                returnKeyType="search"
+                style={styles.searchInput}
+              />
+            </View>
 
-      <View style={styles.productList}>
-        {visibleProducts.map((product) => (
+            <View style={styles.sortSection}>
+              <Text style={styles.sortLabel}>Ordenar por</Text>
+              <View style={styles.sortOptions}>
+                {([
+                  ["name", "Nome"],
+                  ["priceAsc", "Menor preço"],
+                  ["priceDesc", "Maior preço"],
+                ] as const).map(([value, label]) => {
+                  const selected = sortBy === value;
+                  return (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => setSortBy(value)}
+                      style={[styles.sortButton, selected && styles.sortButtonSelected]}
+                    >
+                      <Text style={[styles.sortButtonText, selected && styles.sortButtonTextSelected]}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.productsHeading}>
+              <View>
+                <Text style={styles.sectionTitle}>
+                  {activeCategory === "Tudo" ? "Catálogo completo" : activeCategory}
+                </Text>
+                <Text style={styles.sectionSubtitle}>
+                  {visibleProducts.length} produto(s) encontrado(s)
+                </Text>
+              </View>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          <View style={styles.noProducts}>
+            <Text style={styles.sectionSubtitle}>
+              {catalogLoading ? "Carregando catálogo..." : "Nenhum produto encontrado. Tente outra busca ou categoria."}
+            </Text>
+          </View>
+        }
+        renderItem={({ item: product }) => (
           <ProductCard
-            key={product.id}
             product={product}
             isFavorite={favorites.includes(product.id)}
             onToggleFavorite={() => toggleFavorite(product.id)}
             onAddToCart={() => addToCart(product.id)}
           />
-        ))}
-      </View>
+        )}
+      />
     </AppLayout>
   );
 }
@@ -436,5 +511,72 @@ const styles = StyleSheet.create({
   bottomLabelActive: {
     color: "#31583d",
     fontWeight: "600",
+  },
+  catalogListContent: {
+    flexGrow: 1,
+    paddingTop: 12,
+    paddingBottom: 18,
+  },
+  catalogList: { flex: 1 },
+  productRow: {
+    paddingHorizontal: 18,
+    justifyContent: "space-between",
+    columnGap: 12,
+    marginBottom: 12,
+  },
+  searchContainer: {
+    marginHorizontal: 18,
+    marginBottom: 14,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: "#e3e7df",
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+  },
+  searchInput: {
+    minHeight: 46,
+    color: "#293b30",
+    fontSize: 13,
+  },
+  sortSection: {
+    paddingHorizontal: 22,
+    marginBottom: 18,
+  },
+  sortLabel: {
+    marginBottom: 8,
+    color: "#526057",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  sortOptions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sortButton: {
+    flex: 1,
+    minHeight: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e3e7df",
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+  },
+  sortButtonSelected: {
+    borderColor: "#31583d",
+    backgroundColor: "#edf1e8",
+  },
+  sortButtonText: {
+    color: "#69756c",
+    fontSize: 9,
+  },
+  sortButtonTextSelected: {
+    color: "#31583d",
+    fontWeight: "700",
+  },
+  noProducts: {
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: "center",
   },
 });

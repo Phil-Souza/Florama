@@ -29,6 +29,7 @@ export default function FavoritosScreen() {
               key={product.id}
               product={product}
               isFavorite={true}
+              compact
               onToggleFavorite={() => toggleFavorite(product.id)}
               onAddToCart={() => addToCart(product.id)}
             />

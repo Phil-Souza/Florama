@@ -62,7 +62,7 @@ export default function PerfilScreen() {
           <Text style={styles.saveButtonText}>Salvar dados</Text>
         </Pressable>
         {error !== "" && <Text style={styles.errorMessage}>{error}</Text>}
-        {saved && <Text style={styles.savedMessage}>Dados guardados nesta sessão.</Text>}
+        {saved && <Text style={styles.savedMessage}>Dados sincronizados com sua conta.</Text>}
         <Text style={styles.apiNote}>Seus dados são sincronizados com sua conta.</Text>
 
         {hasAccount && (
@@ -73,6 +73,13 @@ export default function PerfilScreen() {
               <Text style={styles.actionLabel}>Meus pedidos</Text>
               <Text style={styles.actionArrow}>›</Text>
             </Pressable>
+            {user?.role === "admin" && (
+              <Pressable style={styles.actionButton} onPress={() => router.navigate("/admin")}>
+                <Text style={styles.actionIcon}>▣</Text>
+                <Text style={styles.actionLabel}>Administração de pedidos</Text>
+                <Text style={styles.actionArrow}>›</Text>
+              </Pressable>
+            )}
             <Pressable style={[styles.actionButton, styles.signOutButton]} onPress={handleSignOut}>
               <Text style={styles.actionIcon}>↪</Text>
               <Text style={[styles.actionLabel, styles.signOutLabel]}>Sair da conta</Text>
