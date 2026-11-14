@@ -193,8 +193,9 @@
 //     color: '#9A858A',
 //   },
 // });
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { router } from "expo-router";
+import { useStore } from "@/context/StoreContext";
 import {
   DimensionValue,
   Pressable,
@@ -316,10 +317,10 @@ export default function Index() {
         </View> */}
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push("/navegation")}
+          onPress={() => router.push("/login")}
           style={styles.button}
         >
-          <Text style={styles.buttonText}>Get Started</Text>
+          <Text style={styles.buttonText}>Entrar ou criar conta</Text>
         </Pressable>
       </View>
     </View>

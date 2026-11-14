@@ -8,11 +8,11 @@ import type { ProfileData } from "@/context/StoreContext";
 const emptyForm: ProfileData = { name: "", email: "", phone: "", address: "" };
 
 export default function PerfilScreen() {
-  const { profile, saveProfile, signOut } = useStore();
+  const { profile, user, saveProfile, signOut } = useStore();
   const [form, setForm] = useState<ProfileData>(profile);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-  const hasAccount = Object.values(profile).every((value) => value.trim().length > 0);
+  const hasAccount = user !== null;
 
   const updateField = (field: keyof ProfileData, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -20,23 +20,32 @@ export default function PerfilScreen() {
     setError("");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (Object.values(form).some((value) => value.trim().length === 0)) {
       setError("Preencha todos os campos para salvar seus dados.");
       setSaved(false);
       return;
     }
-    saveProfile(form);
-    setSaved(true);
-    setError("");
+    try {
+      await saveProfile(form);
+      setSaved(true);
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar seus dados.");
+      setSaved(false);
+    }
   };
 
-  const handleSignOut = () => {
-    signOut();
-    setForm(emptyForm);
-    setSaved(false);
-    setError("");
-    router.replace("/navegation");
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setForm(emptyForm);
+      setSaved(false);
+      setError("");
+      router.replace("/login");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível sair da conta.");
+    }
   };
 
   return (
@@ -45,7 +54,7 @@ export default function PerfilScreen() {
 
       <View style={styles.form}>
         <Field label="Nome completo" value={form.name} placeholder="Como podemos chamar você?" onChangeText={(value) => updateField("name", value)} />
-        <Field label="E-mail" value={form.email} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" onChangeText={(value) => updateField("email", value)} />
+        <Field label="E-mail" value={form.email} placeholder="voce@email.com" keyboardType="email-address" autoCapitalize="none" editable={false} onChangeText={(value) => updateField("email", value)} />
         <Field label="Telefone" value={form.phone} placeholder="(00) 00000-0000" keyboardType="phone-pad" onChangeText={(value) => updateField("phone", value)} />
         <Field label="Endereço de entrega" value={form.address} placeholder="Rua, número, bairro e cidade" onChangeText={(value) => updateField("address", value)} />
 
@@ -54,7 +63,7 @@ export default function PerfilScreen() {
         </Pressable>
         {error !== "" && <Text style={styles.errorMessage}>{error}</Text>}
         {saved && <Text style={styles.savedMessage}>Dados guardados nesta sessão.</Text>}
-        <Text style={styles.apiNote}>O perfil e os pedidos ainda não estão conectados ao banco de dados.</Text>
+        <Text style={styles.apiNote}>Seus dados são sincronizados com sua conta.</Text>
 
         {hasAccount && (
           <View style={styles.accountActions}>
@@ -83,9 +92,10 @@ type FieldProps = {
   onChangeText: (value: string) => void;
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  editable?: boolean;
 };
 
-function Field({ label, value, placeholder, onChangeText, keyboardType = "default", autoCapitalize = "sentences" }: FieldProps) {
+function Field({ label, value, placeholder, onChangeText, keyboardType = "default", autoCapitalize = "sentences", editable = true }: FieldProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -96,6 +106,7 @@ function Field({ label, value, placeholder, onChangeText, keyboardType = "defaul
         placeholderTextColor="#9aa19b"
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
+        editable={editable}
         style={styles.input}
       />
     </View>

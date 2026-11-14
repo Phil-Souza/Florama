@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AppLayout, AppHeader } from "@/components/AppLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { useStore } from "@/context/StoreContext";
-import { categories, categorySymbols, products } from "@/data/catalog";
+import { categorySymbols } from "@/data/catalog";
 import type { Category } from "@/data/catalog";
 
 function HeroFlowers() {
@@ -26,18 +26,23 @@ function HeroFlowers() {
 
 export default function Navegation() {
   const [activeCategory, setActiveCategory] = useState<Category>("Tudo");
-  const { favorites, toggleFavorite, addToCart } = useStore();
+  const { favorites, toggleFavorite, addToCart, products, categories, catalogError, refreshCatalog } = useStore();
 
   const visibleProducts = useMemo(
     () => activeCategory === "Tudo"
       ? products
       : products.filter((product) => product.category === activeCategory),
-    [activeCategory],
+    [activeCategory, products],
   );
 
   return (
     <AppLayout activeTab="inicio">
       <AppHeader subtitle="Flores para momentos especiais" />
+      {catalogError !== "" && (
+        <Pressable onPress={() => void refreshCatalog()} style={styles.apiNotice}>
+          <Text style={styles.apiNoticeText}>Não foi possível atualizar o catálogo. Toque para tentar novamente.</Text>
+        </Pressable>
+      )}
 
       <View style={styles.hero}>
         <View style={styles.heroCopy}>
@@ -83,11 +88,11 @@ export default function Navegation() {
       <View style={styles.productList}>
         {visibleProducts.map((product) => (
           <ProductCard
-            key={product.name}
+            key={product.id}
             product={product}
-            isFavorite={favorites.includes(product.name)}
-            onToggleFavorite={() => toggleFavorite(product.name)}
-            onAddToCart={() => addToCart(product.name)}
+            isFavorite={favorites.includes(product.id)}
+            onToggleFavorite={() => toggleFavorite(product.id)}
+            onAddToCart={() => addToCart(product.id)}
           />
         ))}
       </View>
@@ -158,6 +163,8 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "700",
   },
+  apiNotice: { marginHorizontal: 18, marginBottom: 12, padding: 10, borderRadius: 10, backgroundColor: "#f9e9e6" },
+  apiNoticeText: { color: "#8e423b", fontSize: 11, textAlign: "center" },
   hero: {
     minHeight: 224,
     marginHorizontal: 16,

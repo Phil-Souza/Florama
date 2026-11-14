@@ -3,11 +3,11 @@ import { router } from "expo-router";
 import { AppHeader, AppLayout } from "@/components/AppLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { useStore } from "@/context/StoreContext";
-import { products } from "@/data/catalog";
+
 
 export default function FavoritosScreen() {
-  const { favorites, toggleFavorite, addToCart } = useStore();
-  const favoriteProducts = products.filter((product) => favorites.includes(product.name));
+  const { favorites, toggleFavorite, addToCart, products } = useStore();
+  const favoriteProducts = products.filter((product) => favorites.includes(product.id));
 
   return (
     <AppLayout activeTab="favoritos">
@@ -26,11 +26,11 @@ export default function FavoritosScreen() {
         <View style={styles.productList}>
           {favoriteProducts.map((product) => (
             <ProductCard
-              key={product.name}
+              key={product.id}
               product={product}
               isFavorite={true}
-              onToggleFavorite={() => toggleFavorite(product.name)}
-              onAddToCart={() => addToCart(product.name)}
+              onToggleFavorite={() => toggleFavorite(product.id)}
+              onAddToCart={() => addToCart(product.id)}
             />
           ))}
         </View>

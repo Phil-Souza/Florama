@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ReactNode } from "react";
@@ -84,10 +85,24 @@ function BottomNavigation({ activeTab }: { activeTab: AppTab | null }) {
 }
 
 export function AppLayout({ children, activeTab }: AppLayoutProps) {
+  const { authReady, user, authError } = useStore();
+  useEffect(() => {
+    if (authReady && !user) router.replace("/login");
+  }, [authReady, user]);
+
+  if (!authReady || !user) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        <View style={styles.authLoading}><Text style={styles.loadingText}>Carregando sua conta...</Text></View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <View style={styles.page}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {authError !== "" && <View style={styles.apiErrorBanner}><Text style={styles.apiErrorText}>{authError}</Text></View>}
           {children}
         </ScrollView>
         <BottomNavigation activeTab={activeTab} />
@@ -141,6 +156,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#31583d",
   },
   badgeText: { color: "#ffffff", fontSize: 9, fontWeight: "700" },
+  authLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loadingText: { color: "#667368", fontSize: 13 },
+  apiErrorBanner: { marginHorizontal: 18, marginBottom: 12, padding: 11, borderRadius: 10, backgroundColor: "#f9e9e6" },
+  apiErrorText: { color: "#8e423b", fontSize: 11, lineHeight: 16 },
   bottomBar: {
     minHeight: 64,
     paddingHorizontal: 10,

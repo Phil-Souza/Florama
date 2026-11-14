@@ -1,5 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Product } from "@/data/catalog";
+
+function formatPrice(priceCents: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(priceCents / 100);
+}
 
 type ProductCardProps = {
   product: Product;
@@ -9,6 +14,23 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart }: ProductCardProps) {
+  const [justAdded, setJustAdded] = useState(false);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+  }, []);
+
+  const handleAddToCart = () => {
+    onAddToCart();
+    setJustAdded(true);
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => {
+      setJustAdded(false);
+      feedbackTimer.current = null;
+    }, 1600);
+  };
+
   return (
     <View style={styles.card}>
       <View style={[styles.art, { backgroundColor: product.color }]}>
@@ -27,9 +49,14 @@ export function ProductCard({ product, isFavorite, onToggleFavorite, onAddToCart
           </Pressable>
         </View>
         <Text numberOfLines={2} style={styles.detail}>{product.detail}</Text>
-        <Text style={styles.price}>{product.price}</Text>
-        <Pressable accessibilityRole="button" onPress={onAddToCart} style={styles.addButton}>
-          <Text style={styles.addButtonText}>Adicionar à sacola</Text>
+        <Text style={styles.price}>{formatPrice(product.priceCents)}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={justAdded ? product.name + " foi adicionado à sacola" : "Adicionar " + product.name + " à sacola"}
+          onPress={handleAddToCart}
+          style={[styles.addButton, justAdded && styles.addButtonConfirmed]}
+        >
+          <Text style={styles.addButtonText}>{justAdded ? "✓ Adicionado" : "Adicionar à sacola"}</Text>
         </Pressable>
       </View>
     </View>
@@ -55,5 +82,6 @@ const styles = StyleSheet.create({
   detail: { minHeight: 28, marginTop: 3, color: "#899089", fontSize: 9, lineHeight: 13 },
   price: { marginTop: 5, color: "#35463a", fontSize: 11, fontWeight: "700" },
   addButton: { marginTop: 9, paddingVertical: 9, alignItems: "center", borderRadius: 11, backgroundColor: "#31583d" },
+  addButtonConfirmed: { backgroundColor: "#64876a" },
   addButtonText: { color: "#ffffff", fontSize: 10, fontWeight: "600" },
 });

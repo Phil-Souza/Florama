@@ -1,25 +1,35 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { AppHeader, AppLayout } from "@/components/AppLayout";
 import { useStore } from "@/context/StoreContext";
-import { products } from "@/data/catalog";
 
-function priceToCents(price: string) {
-  const [wholePart, decimalPart = "00"] = price.replace("R$", "").trim().split(",");
-  const whole = Number(wholePart.replace(/\./g, ""));
-  return whole * 100 + Number(decimalPart);
-}
 
 function formatCents(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
 export default function CarrinhoScreen() {
-  const { cartItems, cartCount, setCartQuantity } = useStore();
+  const { cartItems, cartCount, setCartQuantity, products, createOrder } = useStore();
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+
+  const handleCheckout = async () => {
+    setCheckingOut(true);
+    setCheckoutError("");
+    try {
+      await createOrder();
+      router.navigate("/pedidos");
+    } catch (cause) {
+      setCheckoutError(cause instanceof Error ? cause.message : "Não foi possível registrar o pedido.");
+    } finally {
+      setCheckingOut(false);
+    }
+  };
   const lines = Object.entries(cartItems)
-    .map(([name, quantity]) => ({ product: products.find((item) => item.name === name), quantity }))
+    .map(([productId, quantity]) => ({ product: products.find((item) => item.id === productId), quantity }))
     .filter((line): line is { product: (typeof products)[number]; quantity: number } => Boolean(line.product));
-  const subtotal = lines.reduce((sum, line) => sum + priceToCents(line.product.price) * line.quantity, 0);
+  const subtotal = lines.reduce((sum, line) => sum + line.product.priceCents * line.quantity, 0);
 
   return (
     <AppLayout activeTab={null}>
@@ -38,25 +48,25 @@ export default function CarrinhoScreen() {
         <>
           <View style={styles.items}>
             {lines.map(({ product, quantity }) => (
-              <View key={product.name} style={styles.item}>
+              <View key={product.id} style={styles.item}>
                 <View style={[styles.itemArt, { backgroundColor: product.color }]}>
                   <Text style={styles.itemEmoji}>{product.flower}</Text>
                 </View>
                 <View style={styles.itemInfo}>
                   <Text numberOfLines={1} style={styles.itemName}>{product.name}</Text>
                   <Text style={styles.itemDetail}>{product.detail}</Text>
-                  <Text style={styles.itemPrice}>{product.price}</Text>
+                  <Text style={styles.itemPrice}>{formatCents(product.priceCents)}</Text>
                   <View style={styles.quantityRow}>
-                    <Pressable accessibilityLabel="Diminuir quantidade" onPress={() => setCartQuantity(product.name, quantity - 1)} style={styles.quantityButton}>
+                    <Pressable accessibilityLabel="Diminuir quantidade" onPress={() => setCartQuantity(product.id, quantity - 1)} style={styles.quantityButton}>
                       <Text style={styles.quantitySymbol}>−</Text>
                     </Pressable>
                     <Text style={styles.quantity}>{quantity}</Text>
-                    <Pressable accessibilityLabel="Aumentar quantidade" onPress={() => setCartQuantity(product.name, quantity + 1)} style={styles.quantityButton}>
+                    <Pressable accessibilityLabel="Aumentar quantidade" onPress={() => setCartQuantity(product.id, quantity + 1)} style={styles.quantityButton}>
                       <Text style={styles.quantitySymbol}>+</Text>
                     </Pressable>
                   </View>
                 </View>
-                <Pressable accessibilityRole="button" accessibilityLabel={"Remover " + product.name} onPress={() => setCartQuantity(product.name, 0)}>
+                <Pressable accessibilityRole="button" accessibilityLabel={"Remover " + product.name} onPress={() => setCartQuantity(product.id, 0)}>
                   <Text style={styles.remove}>Remover</Text>
                 </Pressable>
               </View>
@@ -68,11 +78,12 @@ export default function CarrinhoScreen() {
               <Text style={styles.summaryLabel}>Subtotal</Text>
               <Text style={styles.summaryValue}>{formatCents(subtotal)}</Text>
             </View>
-            <Text style={styles.deliveryNote}>Entrega calculada na finalização do pedido.</Text>
-            <Pressable disabled style={[styles.primaryButton, styles.disabledButton]}>
-              <Text style={styles.primaryButtonText}>Finalizar pedido</Text>
+            <Text style={styles.deliveryNote}>Taxa de entrega: R$ 0,00</Text>
+            {checkoutError !== "" && <Text style={styles.checkoutError}>{checkoutError}</Text>}
+            <Pressable disabled={checkingOut} onPress={() => void handleCheckout()} style={[styles.primaryButton, checkingOut && styles.disabledButton]}>
+              <Text style={styles.primaryButtonText}>{checkingOut ? "Registrando pedido..." : "Confirmar pedido"}</Text>
             </Pressable>
-            <Text style={styles.apiNote}>A finalização será ativada quando conectarmos a API.</Text>
+            <Text style={styles.apiNote}>O pedido será criado com pagamento pendente; o pagamento online ainda não está integrado.</Text>
           </View>
         </>
       )}
@@ -108,6 +119,7 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.5 },
   primaryButtonText: { color: "#ffffff", fontSize: 12, fontWeight: "600" },
   apiNote: { marginTop: 8, color: "#899089", fontSize: 10, textAlign: "center" },
+  checkoutError: { marginTop: 10, color: "#a34444", fontSize: 11, lineHeight: 16, textAlign: "center" },
   emptyState: { alignItems: "center", paddingHorizontal: 36, paddingVertical: 52 },
   emptyIcon: { color: "#78927d", fontSize: 48 },
   emptyTitle: { marginTop: 10, color: "#293b30", fontFamily: "Georgia", fontSize: 21 },
