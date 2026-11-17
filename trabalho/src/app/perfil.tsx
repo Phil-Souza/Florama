@@ -74,11 +74,18 @@ export default function PerfilScreen() {
               <Text style={styles.actionArrow}>›</Text>
             </Pressable>
             {user?.role === "admin" && (
-              <Pressable style={styles.actionButton} onPress={() => router.navigate("/admin")}>
-                <Text style={styles.actionIcon}>▣</Text>
-                <Text style={styles.actionLabel}>Administração de pedidos</Text>
-                <Text style={styles.actionArrow}>›</Text>
-              </Pressable>
+              <>
+                <Pressable style={styles.actionButton} onPress={() => router.navigate("/admin")}>
+                  <Text style={styles.actionIcon}>▣</Text>
+                  <Text style={styles.actionLabel}>Administração de pedidos</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </Pressable>
+                <Pressable style={styles.actionButton} onPress={() => router.navigate("/admin-catalog")}>
+                  <Text style={styles.actionIcon}>✿</Text>
+                  <Text style={styles.actionLabel}>Gerenciar catálogo</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </Pressable>
+              </>
             )}
             <Pressable style={[styles.actionButton, styles.signOutButton]} onPress={handleSignOut}>
               <Text style={styles.actionIcon}>↪</Text>

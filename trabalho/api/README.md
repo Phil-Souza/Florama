@@ -57,6 +57,7 @@ Confirme que exatamente a conta pretendida foi retornada como `admin`. Não exis
 - `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{order_id}`, `POST /api/orders/{order_id}/cancel` (o cliente pode cancelar apenas o próprio pedido enquanto aguarda pagamento)
 - `GET /api/admin/orders`, `POST /api/admin/orders/{order_id}/confirm-payment`, `PATCH /api/admin/orders/{order_id}/status` (somente administradores)
 - `DELETE /api/admin/orders/{order_id}` (somente administradores; exclui definitivamente apenas pedidos cancelados, pendentes e sem auditoria de pagamento)
+- `GET/POST /api/admin/products`, `PUT /api/admin/products/{product_id}`, `PATCH /api/admin/products/{product_id}/availability`, `DELETE /api/admin/products/{product_id}` (somente administradores)
 
 O cadastro exige nome de 2 a 64 caracteres, e-mail válido terminado em `.com` ou `.br`, celular brasileiro com 11 dígitos no formato `DD9XXXXXXXX`, senha entre 8 e 128 caracteres, confirmação idêntica à senha e endereço com pelo menos 5 caracteres. O formulário e a API validam os dados; a API só grava o perfil e cria a sacola dentro de uma transação depois de validar a requisição e preparar a resposta de autenticação.
 
@@ -65,3 +66,5 @@ O cadastro exige nome de 2 a 64 caracteres, e-mail válido terminado em `.com` o
 Após receber o pedido criado pela API, o app tenta abrir `wa.me` com o pedido, itens, quantidades e total. Isso não altera o status de pagamento e não envia a mensagem automaticamente. Administradores devem conferir o recebimento no extrato/conta antes de validar; comprovantes enviados pelo cliente não são confirmação automática. A validação registra o administrador e o horário, é idempotente, e o andamento só aceita transições definidas pela API.
 
 Na área administrativa, a exclusão é individual e exige confirmação. Só pedidos já cancelados, ainda pendentes e sem registro de validação podem ser excluídos; pedidos pagos ou em andamento permanecem no histórico para preservar a auditoria. Os itens associados são removidos em cascata pelo vínculo existente no banco.
+
+Administradores podem criar e editar produtos do catálogo. A ação de remover desativa o produto (`ativo = false`) em vez de apagá-lo fisicamente, preservando referências de favoritos, carrinhos e pedidos antigos. Produtos inativos não são retornados ao catálogo público nem podem ser adicionados à sacola; podem ser reativados pela tela administrativa. Não é necessária migração adicional para essa funcionalidade.

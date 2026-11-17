@@ -117,6 +117,13 @@ export default function AdminScreen() {
       <AppHeader title="Administração" subtitle="Pedidos e validação manual de pagamentos." showBrand={false} />
 
       <View style={styles.content}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.navigate("/admin-catalog")}
+          style={styles.catalogButton}
+        >
+          <Text style={styles.catalogButtonText}>Gerenciar catálogo de produtos ›</Text>
+        </Pressable>
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
             Confira o recebimento no extrato/conta antes de validar. Imagens de comprovante não confirmam o pagamento.
@@ -280,6 +287,8 @@ const styles = StyleSheet.create({
   backButton: { marginHorizontal: 22, marginBottom: 8, alignSelf: "flex-start", paddingVertical: 6 },
   backText: { color: "#31583d", fontSize: 12, fontWeight: "600" },
   content: { paddingHorizontal: 18, paddingBottom: 12 },
+  catalogButton: { marginBottom: 12, paddingVertical: 11, alignItems: "center", borderWidth: 1, borderColor: "#31583d", borderRadius: 10, backgroundColor: "#ffffff" },
+  catalogButtonText: { color: "#31583d", fontSize: 11, fontWeight: "600" },
   notice: { marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: "#fff3d8" },
   noticeText: { color: "#74591f", fontSize: 11, lineHeight: 16 },
   success: { marginBottom: 10, color: "#31583d", fontSize: 12, textAlign: "center" },

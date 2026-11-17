@@ -65,6 +65,28 @@ class AdminOrderStatusRequest(BaseModel):
     status: Literal["em_preparo", "pronta_entrega", "concluida", "cancelada"]
 
 
+class AdminProductRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    name: str = Field(min_length=2, max_length=100)
+    detail: str = Field(min_length=2, max_length=500)
+    price_cents: int = Field(alias="priceCents", gt=0)
+    category_slug: str = Field(alias="categorySlug", min_length=1, max_length=60)
+    flower: str = Field(min_length=1, max_length=16)
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("name", "detail", "category_slug", "flower", "color", mode="before")
+    @classmethod
+    def trim_product_text(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
+
+
+class AdminProductAvailabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active: bool
+
+
 class CartItemRequest(BaseModel):
     quantity: int = Field(ge=1, le=99)
 

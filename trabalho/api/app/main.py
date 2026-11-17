@@ -8,7 +8,16 @@ from psycopg.errors import UniqueViolation
 
 from .config import CORS_ORIGINS
 from .database import get_db
-from .schemas import AdminOrderStatusRequest, CartItemRequest, LoginRequest, OrderCreateRequest, ProfileUpdateRequest, RegisterRequest
+from .schemas import (
+    AdminOrderStatusRequest,
+    AdminProductAvailabilityRequest,
+    AdminProductRequest,
+    CartItemRequest,
+    LoginRequest,
+    OrderCreateRequest,
+    ProfileUpdateRequest,
+    RegisterRequest,
+)
 from .security import create_access_token, get_current_user_id, hash_password, verify_password
 
 app = FastAPI(title="Florama API", version="1.0.0")
@@ -41,6 +50,14 @@ def product_out(row: dict) -> dict:
         "category": row["categoria"],
         "flower": row["emoji"],
         "color": row["cor_fundo"],
+    }
+
+
+def admin_product_out(row: dict) -> dict:
+    return {
+        **product_out(row),
+        "categorySlug": row["categoria_slug"],
+        "active": row["ativo"],
     }
 
 
@@ -191,6 +208,175 @@ def list_products(
         (category, category),
     ).fetchall()
     return [product_out(row) for row in rows]
+
+
+@app.get("/api/admin/products")
+def list_admin_products(
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    rows = connection.execute(
+        """
+        SELECT p.id, p.nome, p.descricao, p.preco, c.nome AS categoria,
+               c.slug AS categoria_slug, p.emoji, p.cor_fundo, p.ativo
+        FROM public.produtos p
+        JOIN public.categorias c ON c.id = p.categoria_id
+        ORDER BY p.ativo DESC, c.ordem, p.nome
+        """
+    ).fetchall()
+    return [admin_product_out(row) for row in rows]
+
+
+@app.post("/api/admin/products", status_code=status.HTTP_201_CREATED)
+def create_admin_product(
+    payload: AdminProductRequest,
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        category = connection.execute(
+            "SELECT id FROM public.categorias WHERE slug = %s",
+            (payload.category_slug,),
+        ).fetchone()
+        if not category:
+            raise HTTPException(status_code=404, detail="Categoria não encontrada.")
+        product = connection.execute(
+            """
+            INSERT INTO public.produtos
+              (categoria_id, nome, descricao, preco, emoji, cor_fundo, ativo)
+            VALUES (%s, %s, %s, %s, %s, %s, true)
+            RETURNING id
+            """,
+            (
+                category["id"],
+                payload.name,
+                payload.detail,
+                Decimal(payload.price_cents) / 100,
+                payload.flower,
+                payload.color,
+            ),
+        ).fetchone()
+        created = connection.execute(
+            """
+            SELECT p.id, p.nome, p.descricao, p.preco, c.nome AS categoria,
+                   c.slug AS categoria_slug, p.emoji, p.cor_fundo, p.ativo
+            FROM public.produtos p
+            JOIN public.categorias c ON c.id = p.categoria_id
+            WHERE p.id = %s
+            """,
+            (product["id"],),
+        ).fetchone()
+        return admin_product_out(created)
+
+
+@app.put("/api/admin/products/{product_id}")
+def update_admin_product(
+    product_id: UUID,
+    payload: AdminProductRequest,
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        category = connection.execute(
+            "SELECT id FROM public.categorias WHERE slug = %s",
+            (payload.category_slug,),
+        ).fetchone()
+        if not category:
+            raise HTTPException(status_code=404, detail="Categoria não encontrada.")
+        updated = connection.execute(
+            """
+            UPDATE public.produtos
+            SET categoria_id = %s, nome = %s, descricao = %s, preco = %s,
+                emoji = %s, cor_fundo = %s
+            WHERE id = %s
+            RETURNING id
+            """,
+            (
+                category["id"],
+                payload.name,
+                payload.detail,
+                Decimal(payload.price_cents) / 100,
+                payload.flower,
+                payload.color,
+                product_id,
+            ),
+        ).fetchone()
+        if not updated:
+            raise HTTPException(status_code=404, detail="Produto não encontrado.")
+        product = connection.execute(
+            """
+            SELECT p.id, p.nome, p.descricao, p.preco, c.nome AS categoria,
+                   c.slug AS categoria_slug, p.emoji, p.cor_fundo, p.ativo
+            FROM public.produtos p
+            JOIN public.categorias c ON c.id = p.categoria_id
+            WHERE p.id = %s
+            """,
+            (product_id,),
+        ).fetchone()
+        return admin_product_out(product)
+
+
+@app.patch("/api/admin/products/{product_id}/availability")
+def set_admin_product_availability(
+    product_id: UUID,
+    payload: AdminProductAvailabilityRequest,
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        product = connection.execute(
+            """
+            UPDATE public.produtos
+            SET ativo = %s
+            WHERE id = %s
+            RETURNING id
+            """,
+            (payload.active, product_id),
+        ).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Produto não encontrado.")
+        updated = connection.execute(
+            """
+            SELECT p.id, p.nome, p.descricao, p.preco, c.nome AS categoria,
+                   c.slug AS categoria_slug, p.emoji, p.cor_fundo, p.ativo
+            FROM public.produtos p
+            JOIN public.categorias c ON c.id = p.categoria_id
+            WHERE p.id = %s
+            """,
+            (product_id,),
+        ).fetchone()
+        return admin_product_out(updated)
+
+
+@app.delete("/api/admin/products/{product_id}")
+def deactivate_admin_product(
+    product_id: UUID,
+    _: UUID = Depends(require_admin),
+    connection: psycopg.Connection = Depends(get_db),
+):
+    with connection.transaction():
+        product = connection.execute(
+            """
+            UPDATE public.produtos
+            SET ativo = false
+            WHERE id = %s
+            RETURNING id
+            """,
+            (product_id,),
+        ).fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Produto não encontrado.")
+        deactivated = connection.execute(
+            """
+            SELECT p.id, p.nome, p.descricao, p.preco, c.nome AS categoria,
+                   c.slug AS categoria_slug, p.emoji, p.cor_fundo, p.ativo
+            FROM public.produtos p
+            JOIN public.categorias c ON c.id = p.categoria_id
+            WHERE p.id = %s
+            """,
+            (product_id,),
+        ).fetchone()
+        return admin_product_out(deactivated)
 
 
 @app.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
